@@ -146,7 +146,7 @@ class Profile(Person):
 
 
 if __name__ == "__main__":
-    token = "YOUR AUTH API TOKEN"
+    token = "YOUR AUTH API_TOKEN"
     api = tinderAPI(token)
 
     # while True:
