@@ -7,6 +7,12 @@ from likeliness_classifier import Classifier
 import person_detector
 import tensorflow as tf
 from time import time
+import logging  # Import the logging module
+# Just disables the warning, doesn't take advantage of AVX/FMA to run faster
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+logging.basicConfig(filename='auto_tinder.log', level=logging.DEBUG)  # Create a log file
+
 
 TINDER_URL = "https://api.gotinder.com"
 geolocator = Nominatim(user_agent="auto-tinder")
@@ -77,12 +83,18 @@ class Person(object):
         return self._api.dislike(self.id)
 
     def download_images(self, folder=".", sleep_max_for=0):
+        if not os.path.exists(PROF_FILE):
+            with open(PROF_FILE, "w"):
+                pass  # Create an empty file
+
         with open(PROF_FILE, "r") as f:
             lines = f.readlines()
             if self.id in lines:
                 return
+
         with open(PROF_FILE, "a") as f:
-            f.write(self.id+"\r\n")
+            f.write(self.id + "\r\n")
+
         index = -1
         for image_url in self.images:
             index += 1
@@ -90,7 +102,8 @@ class Person(object):
             if req.status_code == 200:
                 with open(f"{folder}/{self.id}_{self.name}_{index}.jpeg", "wb") as f:
                     f.write(req.content)
-            sleep(random()*sleep_max_for)
+            sleep(random() * sleep_max_for)
+
 
     def predict_likeliness(self, classifier, sess):
         ratings = []
@@ -115,6 +128,7 @@ class Person(object):
 
 
 
+
 class Profile(Person):
 
     def __init__(self, data, api):
@@ -132,32 +146,41 @@ class Profile(Person):
 
 
 if __name__ == "__main__":
-    token = "YOUR-API-TOKEN"
+    token = "41189571-feb2-4833-b9e4-788c8300341b"
     api = tinderAPI(token)
+
+    # while True:
+    #     persons = api.nearby_persons()
+    #     for person in persons:
+    #         person.download_images(folder="./images/unclassified", sleep_max_for=random()*3)
+    #         sleep(random()*10)
+    #     sleep(random()*10)
 
     detection_graph = person_detector.open_graph()
     with detection_graph.as_default():
-        with tf.Session() as sess:
+        with tf.compat.v1.Session(target='', graph=None, config=None) as sess:
 
             classifier = Classifier(graph="./tf/training_output/retrained_graph.pb",
                                     labels="./tf/training_output/retrained_labels.txt")
 
-            end_time = 1568992917 + 60*60*2.8
+            end_time = time() + 60*60*2.8
+            current_time = time()
+            print("Current Time:", current_time)
+            print("End Time:", end_time)
             while time() < end_time:
+                print("-------------------------")
                 try:
                     print(f"------ TIME LEFT: {(end_time - time())/60} min -----")
+
                     persons = api.nearby_persons()
-                    pos_schools = ["Universität Zürich", "University of Zurich", "UZH", "HWZ Hochschule für Wirtschaft Zürich",
-                                   "ETH Zürich", "ETH Zurich", "ETH", "ETHZ", "Hochschule Luzern", "HSLU", "ZHAW",
-                                   "Zürcher Hochschule für Angewandte Wissenschaften", "Universität Bern", "Uni Bern",
-                                   "PHLU", "PH Luzern", "Fachhochschule Luzern", "Eidgenössische Technische Hochschule Zürich"]
+                    pos_schools = ["Universitatea of Michigan"]
 
                     for person in persons:
                         score = person.predict_likeliness(classifier, sess)
 
                         for school in pos_schools:
                             if school in person.schools:
-                                print()
+                                print()  # Print a blank line
                                 score *= 1.2
 
                         print("-------------------------")
@@ -175,10 +198,7 @@ if __name__ == "__main__":
                             res = person.dislike()
                             print("DISLIKE")
                             print("Response: ", res)
-                except Exception:
-                    pass
-
-
-
+                except Exception as e:
+                    print("An error occurred: " + str(e))  # Print the error message
 
     classifier.close()
